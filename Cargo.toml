@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "crates/sea-orm",
+    "crates/sea-query",
+    "crates/sea-schema",
+]
