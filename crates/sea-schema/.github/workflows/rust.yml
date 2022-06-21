@@ -1,0 +1,414 @@
+name: sea-schema
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: clippy
+          override: true
+          
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: >
+            --all-targets
+            --all
+
+  test:
+    name: Unit Test
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: >
+            --all
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+
+  compile-mysql:
+    name: Compile MySQL
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        project: [live/mysql, discovery/mysql, writer/mysql]
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Cargo.lock
+            target
+          key: ${{ github.sha }}-${{ github.run_id }}-${{ runner.os }}-mysql-${{ matrix.project }}
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: >
+            --manifest-path tests/${{ matrix.project }}/Cargo.toml
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: >
+            --manifest-path tests/${{ matrix.project }}/Cargo.toml
+            --no-run
+
+  compile-postgres:
+    name: Compile Postgres
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        project: [live/postgres, discovery/postgres, writer/postgres]
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Cargo.lock
+            target
+          key: ${{ github.sha }}-${{ github.run_id }}-${{ runner.os }}-postgres-${{ matrix.project }}
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: >
+            --manifest-path tests/${{ matrix.project }}/Cargo.toml
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: >
+            --manifest-path tests/${{ matrix.project }}/Cargo.toml
+            --no-run
+
+  compile-sqlite:
+    name: Compile SQLite
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        project: [live/sqlite, discovery/sqlite, writer/sqlite]
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Cargo.lock
+            target
+          key: ${{ github.sha }}-${{ github.run_id }}-${{ runner.os }}-sqlite-${{ matrix.project }}
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: >
+            --manifest-path tests/${{ matrix.project }}/Cargo.toml
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: >
+            --manifest-path tests/${{ matrix.project }}/Cargo.toml
+            --no-run
+  mysql:
+    name: MySQL
+    runs-on: ubuntu-20.04
+    needs: compile-mysql
+    env:
+      DATABASE_URL: "mysql://sea:sea@localhost/sakila"
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [8.0, 5.7]
+        project: [live/mysql, discovery/mysql, writer/mysql]
+    services:
+      mysql:
+        image: mysql:${{ matrix.version }}
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_DB: mysql
+          MYSQL_USER: sea
+          MYSQL_PASSWORD: sea
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_ROOT_PASSWORD:
+        ports:
+          - "3306:3306"
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Cargo.lock
+            target
+          key: ${{ github.sha }}-${{ github.run_id }}-${{ runner.os }}-mysql-${{ matrix.project }}
+
+      - name: Create DB
+        run: mysql -uroot -h 127.0.0.1 mysql -e 'CREATE DATABASE `sakila`'
+
+      - name: Grant Privilege
+        run: mysql -uroot -h 127.0.0.1 mysql -e "GRANT ALL PRIVILEGES ON *.* TO 'sea'@'%'"
+
+      - name: Import DB Schema
+        run: mysql -uroot -h 127.0.0.1 sakila < sakila-schema.sql
+        working-directory: ./tests/sakila/mysql
+
+      - name: Import DB Data
+        run: mysql -uroot -h 127.0.0.1 sakila < sakila-data.sql
+        working-directory: ./tests/sakila/mysql
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: >
+            --manifest-path tests/${{ matrix.project }}/Cargo.toml
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: >
+            --manifest-path tests/${{ matrix.project }}/Cargo.toml
+
+  mariadb:
+    name: MariaDB
+    runs-on: ubuntu-20.04
+    needs: compile-mysql
+    env:
+      DATABASE_URL: "mysql://sea:sea@localhost/sakila"
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [10.6]
+        project: [live/mysql, discovery/mysql, writer/mysql]
+    services:
+      mysql:
+        image: mariadb:${{ matrix.version }}
+        env:
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_DB: mysql
+          MYSQL_USER: sea
+          MYSQL_PASSWORD: sea
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_ROOT_PASSWORD:
+        ports:
+          - "3306:3306"
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Cargo.lock
+            target
+          key: ${{ github.sha }}-${{ github.run_id }}-${{ runner.os }}-mysql-${{ matrix.project }}
+
+      - name: Create DB
+        run: mysql -uroot -h 127.0.0.1 mysql -e 'CREATE DATABASE `sakila`'
+
+      - name: Grant Privilege
+        run: mysql -uroot -h 127.0.0.1 mysql -e "GRANT ALL PRIVILEGES ON *.* TO 'sea'@'%'"
+
+      - name: Import DB Schema
+        run: mysql -uroot -h 127.0.0.1 sakila < sakila-schema.sql
+        working-directory: ./tests/sakila/mysql
+
+      - name: Import DB Data
+        run: mysql -uroot -h 127.0.0.1 sakila < sakila-data.sql
+        working-directory: ./tests/sakila/mysql
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: >
+            --manifest-path tests/${{ matrix.project }}/Cargo.toml
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: >
+            --manifest-path tests/${{ matrix.project }}/Cargo.toml
+
+  postgres:
+    name: Postgres
+    needs: compile-postgres
+    runs-on: ubuntu-20.04
+    env:
+      DATABASE_URL: "postgres://sea:sea@localhost/sakila"
+    strategy:
+      fail-fast: false
+      matrix:
+        version: [13.3, 12.7, 11.12]
+        project: [live/postgres, discovery/postgres, writer/postgres]
+    services:
+      postgres:
+        image: postgres:${{ matrix.version }}
+        env:
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_USER: sea
+          POSTGRES_PASSWORD: sea
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Cargo.lock
+            target
+          key: ${{ github.sha }}-${{ github.run_id }}-${{ runner.os }}-postgres-${{ matrix.project }}
+
+      - name: Create DB
+        run: psql -q postgres://sea:sea@localhost/postgres -c 'CREATE DATABASE "sakila"'
+
+      - name: Import DB Schema
+        run: psql -q postgres://sea:sea@localhost/sakila < sakila-schema.sql
+        working-directory: ./tests/sakila/postgres
+
+      - name: Import DB Data
+        run: psql -q postgres://sea:sea@localhost/sakila < sakila-data.sql
+        working-directory: ./tests/sakila/postgres
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: >
+            --manifest-path tests/${{ matrix.project }}/Cargo.toml
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: >
+            --manifest-path tests/${{ matrix.project }}/Cargo.toml
+
+  sqlite:
+    name: SQLite
+    needs: compile-sqlite
+    runs-on: ubuntu-20.04
+    env:
+      DATABASE_URL: "sqlite::memory:"
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [live/sqlite, discovery/sqlite, writer/sqlite]
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            Cargo.lock
+            target
+          key: ${{ github.sha }}-${{ github.run_id }}-${{ runner.os }}-sqlite-${{ matrix.project }}
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: >
+            --manifest-path tests/${{ matrix.project }}/Cargo.toml
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: >
+            --manifest-path tests/${{ matrix.project }}/Cargo.toml

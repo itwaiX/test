@@ -1,0 +1,4 @@
+ignore = [
+    "tests/compact/*.rs",
+    "tests/expanded/*.rs",
+]

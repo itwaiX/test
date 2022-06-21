@@ -1,0 +1,35 @@
+[package]
+name = "sea-query-rusqlite-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono = { version = "^0" }
+time = { version = "^0.2" }
+serde_json = { version = "^1" }
+uuid = { version = "^0", features = ["serde", "v4"] }
+sea-query = { path = "../../", features = [
+    "rusqlite",
+    "with-chrono",
+    "with-json",
+    "with-uuid",
+    "with-time",
+] }
+# NOTE: if you are copying this example into your own project, use the following line instead:
+# sea-query = { version = "^0", features = [
+#     "rusqlite",
+#     "with-chrono",
+#     "with-json",
+#     "with-uuid",
+#     "with-time",
+# ] }
+
+[dependencies.rusqlite]
+version = "^0.25"
+features = [
+    "bundled",
+    "chrono",
+    "serde_json",
+    "uuid",
+    "time",
+]

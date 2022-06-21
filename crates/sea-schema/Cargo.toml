@@ -1,0 +1,84 @@
+[workspace]
+members = [
+    ".",
+    "tests/discovery/mysql",
+    "tests/discovery/postgres",
+    "tests/discovery/sqlite",
+    "tests/writer/mysql",
+    "tests/writer/postgres",
+    "tests/writer/sqlite",
+    "tests/live/mysql",
+    "tests/live/postgres",
+    "tests/live/sqlite",
+]
+
+[package]
+name = "sea-schema"
+version = "0.8.1"
+authors = [ "Chris Tsang <tyt2y7@gmail.com>" ]
+edition = "2021"
+description = "🌿 SQL schema definition and discovery"
+license = "MIT OR Apache-2.0"
+documentation = "https://docs.rs/sea-schema"
+repository = "https://github.com/SeaQL/sea-schema"
+categories = ["database"]
+keywords = ["database", "sql", "mysql", "postgres"]
+
+[package.metadata.docs.rs]
+features = ["default"]
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lib]
+name = "sea_schema"
+path = "src/lib.rs"
+
+[dependencies]
+futures = { version = "0.3", optional = true }
+sea-schema-derive = { version = "0.1.0", path = "sea-schema-derive" }
+sea-query = { version = "^0.24.0" }
+serde = { version = "^1", features = ["derive"], optional = true }
+sqlx = { version = "^0.5", optional = true }
+log = { version = "^0.4", optional = true }
+
+[features]
+default = ["mysql", "postgres", "sqlite", "discovery", "writer", "probe"]
+debug-print = ["log"]
+mysql = []
+postgres = []
+sqlite = []
+def = []
+discovery = ["futures", "parser"]
+parser = ["query"]
+query = ["def"]
+writer = ["def"]
+probe = []
+sqlx-dep = ["sqlx"]
+sqlx-all = ["sqlx-mysql", "sqlx-postgres", "sqlx-sqlite"]
+sqlx-mysql = [
+    "mysql",
+    "futures",
+    "sqlx-dep",
+    "sea-query/sqlx-mysql",
+    "sqlx/mysql",
+]
+sqlx-postgres = [
+    "postgres",
+    "futures",
+    "sqlx-dep",
+    "sea-query/sqlx-postgres",
+    "sqlx/postgres",
+]
+sqlx-sqlite = [
+    "sqlite",
+    "futures",
+    "sqlx-dep",
+    "sea-query/sqlx-sqlite",
+    "sqlx/sqlite",
+]
+runtime-actix-native-tls = ["sqlx/runtime-actix-native-tls"]
+runtime-async-std-native-tls = ["sqlx/runtime-async-std-native-tls"]
+runtime-tokio-native-tls = ["sqlx/runtime-tokio-native-tls"]
+runtime-actix-rustls = ["sqlx/runtime-actix-rustls"]
+runtime-async-std-rustls = ["sqlx/runtime-async-std-rustls"]
+runtime-tokio-rustls = ["sqlx/runtime-tokio-rustls"]
+with-serde = ["serde"]
